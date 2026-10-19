@@ -2,7 +2,7 @@
  * Service Worker for Offline ADF PWA
  */
 
-const CACHE_NAME = 'adf-app-v1';
+const CACHE_NAME = 'adf-app-v33';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
