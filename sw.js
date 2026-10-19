@@ -36,7 +36,6 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Bypass caching for Google Apps Script API calls
   if (event.request.url.includes('script.google.com')) {
     return;
   }
@@ -47,7 +46,6 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
       return fetch(event.request).catch(() => {
-        // Fallback for offline mode
         if (event.request.mode === 'navigate') {
           return caches.match('./index.html');
         }
