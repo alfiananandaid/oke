@@ -3,12 +3,14 @@
  */
 
 // =========================================================================
-// TEMPATKAN URL WEB APP GOOGLE APPS SCRIPT ANDA DI SINI
+// TARUH URL WEB APP GOOGLE APPS SCRIPT ANDA DI BAWAH INI
+// Contoh: "https://script.google.com/macros/s/AKfycb.../exec"
 // =========================================================================
-const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbyNbnK394KydAVWXo9Ugc7Cuii5MDp2eDgHH2mwzzpcPSleoTD46FiA2lAQsQLSaJTT/exec";
+const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwqisxvvHYr1nOEIP_DsaZmB9SER94GSTUv9L98hpVi4UeCaTtlqdlpeHyVLgdFm_Jm/exec";
 
 const APP_STATE = {
-  apiUrl: localStorage.getItem('adf_api_url') || (DEFAULT_GAS_URL !== "https://script.google.com/macros/s/AKfycbyNbnK394KydAVWXo9Ugc7Cuii5MDp2eDgHH2mwzzpcPSleoTD46FiA2lAQsQLSaJTT/exec" ? DEFAULT_GAS_URL : ''),
+  // Jika DEFAULT_GAS_URL di atas sudah diisi, pop-up pengaturan tidak akan muncul
+  apiUrl: localStorage.getItem('adf_api_url') || (DEFAULT_GAS_URL !== "TARUH_URL_WEB_APP_GAS_ANDA_DISINI" ? DEFAULT_GAS_URL : ''),
   token: localStorage.getItem('adf_token') || '',
   user: JSON.parse(localStorage.getItem('adf_user') || 'null'),
   deviceId: getDeviceId(),
@@ -33,7 +35,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
-  if (!APP_STATE.apiUrl || APP_STATE.apiUrl === "PASANG_URL_WEB_APP_GAS_ANDA_DI_SINI") {
+  // Jika URL API belum diatur (masih tulisan "TARUH_URL..."), tampilkan pop-up
+  if (!APP_STATE.apiUrl || APP_STATE.apiUrl === "TARUH_URL_WEB_APP_GAS_ANDA_DISINI") {
     showModal('config-modal');
     return;
   }
@@ -104,7 +107,7 @@ function setupEventListeners() {
 
 /** API Communication Helper */
 async function apiPost(action, payload = {}) {
-  if (!APP_STATE.apiUrl || APP_STATE.apiUrl === "PASANG_URL_WEB_APP_GAS_ANDA_DI_SINI") {
+  if (!APP_STATE.apiUrl || APP_STATE.apiUrl === "TARUH_URL_WEB_APP_GAS_ANDA_DISINI") {
     throw new Error('API Endpoint belum dikonfigurasi.');
   }
   
@@ -409,12 +412,12 @@ async function loadDashboard() {
 async function loadTransactions() {
   const tbody = document.getElementById('transaction-table-body');
   const statusFilter = document.getElementById('filter-status').value;
-  tbody.innerHTML = '<tr><td colspan="9" class="text-center">Memuat data...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="padding:2rem;">Memuat data...</td></tr>';
 
   try {
     const res = await apiPost('listTransactions', { status: statusFilter });
     if (!res.transactions || res.transactions.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" class="text-center">Tidak ada transaksi ditemukan.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center" style="padding:2rem;">Tidak ada transaksi ditemukan.</td></tr>';
       return;
     }
 
@@ -423,9 +426,9 @@ async function loadTransactions() {
         <td><strong>${item.TransNo}</strong></td>
         <td>${item.Date ? String(item.Date).slice(0, 10) : '-'}</td>
         <td>${item.Place}</td>
-        <td>${item.SKU || '-'}<br><span class="text-sm text-muted">${item.Deskripsi || ''}</span></td>
+        <td><strong>${item.SKU || '-'}</strong><br><span class="text-sm text-muted">${item.Deskripsi || ''}</span></td>
         <td>${item.Qty}</td>
-        <td>${formatRp(item.FinalAmount || 0)}</td>
+        <td><strong>${formatRp(item.FinalAmount || 0)}</strong></td>
         <td><span class="badge">${item.Status}</span></td>
         <td><span class="badge ${item.SLAStatus === 'OVERDUE' ? 'badge-danger' : ''}">${item.SLAStatus || 'ON_TRACK'}</span></td>
         <td><button class="btn btn-secondary btn-sm" onclick="openDetailModal('${item.TransNo}')">Detail</button></td>
@@ -434,7 +437,7 @@ async function loadTransactions() {
     
     window.lastFetchedTransactions = res.transactions;
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">Gagal memuat: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger" style="padding:2rem;">Gagal memuat: ${err.message}</td></tr>`;
   }
 }
 
@@ -450,31 +453,32 @@ function openDetailModal(transNo) {
 
   body.innerHTML = `
     <div class="form-row">
-      <div class="form-group flex-1"><strong>Pemohon:</strong> ${item.Nama} (${item.Username})</div>
-      <div class="form-group flex-1"><strong>Lokasi:</strong> ${item.Place}</div>
+      <div class="form-group flex-1"><label>Pemohon</label> ${item.Nama} (${item.Username})</div>
+      <div class="form-group flex-1"><label>Lokasi</label> ${item.Place}</div>
     </div>
     <div class="form-row">
-      <div class="form-group flex-1"><strong>SKU:</strong> ${item.SKU || '-'}</div>
-      <div class="form-group flex-2"><strong>Deskripsi:</strong> ${item.Deskripsi}</div>
+      <div class="form-group flex-1"><label>SKU</label> ${item.SKU || '-'}</div>
+      <div class="form-group flex-2"><label>Deskripsi</label> ${item.Deskripsi}</div>
     </div>
     <div class="form-row">
-      <div class="form-group flex-1"><strong>Harga:</strong> ${formatRp(item.Price)}</div>
-      <div class="form-group flex-1"><strong>Qty:</strong> ${item.Qty}</div>
-      <div class="form-group flex-1"><strong>Diskon:</strong> ${item.DiscountPercent}%</div>
+      <div class="form-group flex-1"><label>Harga</label> ${formatRp(item.Price)}</div>
+      <div class="form-group flex-1"><label>Qty</label> ${item.Qty}</div>
+      <div class="form-group flex-1"><label>Diskon</label> ${item.DiscountPercent}%</div>
     </div>
-    <div class="form-row">
-      <div class="form-group flex-1"><strong>Total Final:</strong> ${formatRp(item.FinalAmount)}</div>
-      <div class="form-group flex-1"><strong>Status:</strong> ${item.Status}</div>
+    <div class="form-row" style="background: #f8fafc; padding: 1rem; border-radius: 8px;">
+      <div class="form-group flex-1" style="margin:0"><label>Total Final</label> <strong style="color:var(--primary); font-size:1.1rem">${formatRp(item.FinalAmount)}</strong></div>
+      <div class="form-group flex-1" style="margin:0"><label>Status Saat Ini</label> <span class="badge">${item.Status}</span></div>
     </div>
-    <hr>
+    <hr style="margin: 1.5rem 0; border:none; border-top: 1px solid #e2e8f0;">
     <div class="form-group">
-      <strong>Catatan Approval Sebelumnya:</strong>
-      <div class="text-sm">
-        ${item.ADMFeedback ? `<p><strong>ADM:</strong> \${item.ADMFeedback}</p>` : ''}
-        ${item.MGRFeedback ? `<p><strong>MGR:</strong> \${item.MGRFeedback}</p>` : ''}
-        ${item.MSOFeedback ? `<p><strong>MSO:</strong> \${item.MSOFeedback}</p>` : ''}
-        ${item['Buyer Note'] ? `<p><strong>Buyer Note:</strong> \${item['Buyer Note']}</p>` : ''}
-        ${item.StoreFeedback ? `<p><strong>Store Feedback:</strong> \${item.StoreFeedback}</p>` : ''}
+      <label>Catatan Approval Sebelumnya</label>
+      <div class="text-sm" style="background:#f1f5f9; padding: 1rem; border-radius: 8px; border: 1px solid #e2e8f0;">
+        ${item.ADMFeedback ? `<p style="margin-bottom:0.5rem;"><strong>ADM:</strong> \${item.ADMFeedback}</p>` : ''}
+        ${item.MGRFeedback ? `<p style="margin-bottom:0.5rem;"><strong>MGR:</strong> \${item.MGRFeedback}</p>` : ''}
+        ${item.MSOFeedback ? `<p style="margin-bottom:0.5rem;"><strong>MSO:</strong> \${item.MSOFeedback}</p>` : ''}
+        ${item['Buyer Note'] ? `<p style="margin-bottom:0.5rem;"><strong>Buyer Note:</strong> \${item['Buyer Note']}</p>` : ''}
+        ${item.StoreFeedback ? `<p style="margin-bottom:0"><strong>Store Feedback:</strong> \${item.StoreFeedback}</p>` : ''}
+        ${(!item.ADMFeedback && !item.MGRFeedback && !item.MSOFeedback && !item['Buyer Note'] && !item.StoreFeedback) ? '<span class="text-muted">Belum ada catatan.</span>' : ''}
       </div>
     </div>
   `;
@@ -493,48 +497,48 @@ function renderApprovalControls(item) {
       (role === 'MGR' && status === 'PENDING_MGR') ||
       (role === 'MSO' && status === 'PENDING_MSO')) {
     html += `
-      <input type="text" id="action-feedback" placeholder="Masukkan catatan feedback / alasan..." style="margin-bottom:0.5rem; width:100%">
-      <div>
-        <button class="btn btn-success btn-sm" onclick="executeTransition('${item.TransNo}', 'approve')">Approve</button>
-        <button class="btn btn-danger btn-sm" onclick="executeTransition('${item.TransNo}', 'sendback')">Sendback</button>
+      <input type="text" class="form-control" id="action-feedback" placeholder="Masukkan catatan feedback / alasan..." style="margin-bottom:0.8rem;">
+      <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+        <button class="btn btn-success" onclick="executeTransition('${item.TransNo}', 'approve')">Approve</button>
+        <button class="btn btn-danger" onclick="executeTransition('${item.TransNo}', 'sendback')">Sendback</button>
       </div>
     `;
   } else if (role === 'BUYER' && status === 'PENDING_BUYER') {
     html += `
-      <input type="text" id="buyer-note" placeholder="Buyer Note..." style="margin-bottom:0.3rem; width:100%">
-      <input type="text" id="buyer-caused-by" placeholder="Caused By..." style="margin-bottom:0.3rem; width:100%">
-      <select id="buyer-decision" style="margin-bottom:0.5rem; width:100%">
+      <input type="text" class="form-control" id="buyer-note" placeholder="Buyer Note..." style="margin-bottom:0.5rem;">
+      <input type="text" class="form-control" id="buyer-caused-by" placeholder="Caused By..." style="margin-bottom:0.5rem;">
+      <select class="form-control" id="buyer-decision" style="margin-bottom:0.8rem;">
         <option value="APPROVE_DISCOUNT">Approve Discount</option>
         <option value="WRITE_OFF">Write Off (WO)</option>
       </select>
-      <div>
-        <button class="btn btn-success btn-sm" onclick="executeBuyerApprove('${item.TransNo}')">Approve ke Store</button>
-        <button class="btn btn-danger btn-sm" onclick="executeTransition('${item.TransNo}', 'sendback')">Sendback</button>
+      <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+        <button class="btn btn-success" onclick="executeBuyerApprove('${item.TransNo}')">Approve ke Store</button>
+        <button class="btn btn-danger" onclick="executeTransition('${item.TransNo}', 'sendback')">Sendback</button>
       </div>
     `;
   } else if (['STAFF', 'ADM'].includes(role) && ['PENDING_STORE', 'SENDBACK_STAFF'].includes(status)) {
     html += `
-      <input type="text" id="store-trans-no" placeholder="No. Transaksi Kasir Store (Wajib jika Accept)" style="margin-bottom:0.3rem; width:100%">
-      <input type="text" id="store-feedback" placeholder="Feedback / Alasan Keberatan" style="margin-bottom:0.5rem; width:100%">
-      <div>
-        <button class="btn btn-success btn-sm" onclick="executeStoreFeedback('${item.TransNo}', 'accept')">Store Accept</button>
-        <button class="btn btn-warning btn-sm" onclick="executeStoreFeedback('${item.TransNo}', 'object')">Keberatan (Object)</button>
+      <input type="text" class="form-control" id="store-trans-no" placeholder="No. Transaksi Kasir Store (Wajib jika Accept)" style="margin-bottom:0.5rem;">
+      <input type="text" class="form-control" id="store-feedback" placeholder="Feedback / Alasan Keberatan" style="margin-bottom:0.8rem;">
+      <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+        <button class="btn btn-success" onclick="executeStoreFeedback('${item.TransNo}', 'accept')">Store Accept</button>
+        <button class="btn btn-warning" onclick="executeStoreFeedback('${item.TransNo}', 'object')">Keberatan (Object)</button>
       </div>
     `;
   } else if (role === 'BUYER' && ['PENDING_BUYER_REVIEW', 'PENDING_BUYER_FINAL'].includes(status)) {
     html += `
-      <input type="text" id="buyer-final-note" placeholder="Catatan Keputusan Final..." style="margin-bottom:0.5rem; width:100%">
-      <div>
+      <input type="text" class="form-control" id="buyer-final-note" placeholder="Catatan Keputusan Final..." style="margin-bottom:0.8rem;">
+      <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
         ${status === 'PENDING_BUYER_REVIEW' ? `
-          <button class="btn btn-primary btn-sm" onclick="executeBuyerFinal('\${item.TransNo}', 'accept')">Terima Keberatan</button>
-          <button class="btn btn-warning btn-sm" onclick="executeBuyerFinal('\${item.TransNo}', 'revise')">Minta Revisi</button>
+          <button class="btn btn-primary" onclick="executeBuyerFinal('\${item.TransNo}', 'accept')">Terima Keberatan</button>
+          <button class="btn btn-warning" onclick="executeBuyerFinal('\${item.TransNo}', 'revise')">Minta Revisi</button>
         ` : `
-          <button class="btn btn-success btn-sm" onclick="executeBuyerFinal('\${item.TransNo}', 'completed')">Selesaikan Transaksi (Complete)</button>
+          <button class="btn btn-success" onclick="executeBuyerFinal('\${item.TransNo}', 'completed')">Selesaikan Transaksi (Complete)</button>
         `}
       </div>
     `;
   } else {
-    html += `<span class="text-sm text-muted">Tidak ada aksi approval yang diperlukan untuk role Anda pada status ini.</span>`;
+    html += `<div class="text-sm text-muted text-center" style="width:100%; padding: 1rem 0;">Tidak ada aksi approval yang diperlukan untuk role Anda pada status ini.</div>`;
   }
 
   html += `</div>`;
