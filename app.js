@@ -1,5 +1,5 @@
 /* ADF frontend. Configure API_BASE to a secure HTTPS proxy that forwards to Apps Script. */
-const API_BASE = ''; // Example: https://your-proxy.example.com/api
+const API_BASE = 'https://script.google.com/macros/s/AKfycbxOa_H_6dQKzV6nx9-Xjujc9_tpaKu-2ws_gi6C4xRvWpYearDS73iFxvKG2bm2wvzy/exec'; // Example: https://your-proxy.example.com/api
 const STORAGE_TOKEN = 'adf_session_token';
 const STORAGE_DEVICE = 'adf_device_id';
 let currentUser = null;
