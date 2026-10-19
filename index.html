@@ -1,49 +1,299 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0f172a">
-  <title>Automatic Document Feeder (ADF)</title>
-  <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplikasi Pendataan Barang ADF</title>
+  <link rel="stylesheet" href="style.css">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="apple-touch-icon" href="icon.png">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">ADF</div><div><b>Automatic Document Feeder</b><small>Document workflow</small></div></div>
-      <nav id="nav" hidden>
-        <button class="nav-item active" data-view="dashboard">◫ <span>Dashboard</span></button>
-        <button class="nav-item" data-view="new">＋ <span>New Proposal</span></button>
-        <button class="nav-item" data-view="mine">▤ <span>My Submission</span></button>
-        <button class="nav-item" data-view="approval">✓ <span>Approval Center</span></button>
-      </nav>
-      <div class="sidebar-bottom"><span class="dot"></span><span id="connectionLabel">Not connected</span></div>
-    </aside>
-    <main class="main">
-      <header class="topbar">
-        <div><div class="eyebrow">ADF WORKSPACE</div><h1 id="pageTitle">Welcome back</h1></div>
-        <div class="user-chip" id="userChip" hidden><div class="avatar" id="avatar">A</div><div><b id="userName">User</b><small id="userRole">Role</small></div><button class="icon-btn" id="logoutBtn" title="Logout">↗</button></div>
-      </header>
-      <section id="loginView" class="login-layout">
-        <div class="login-copy"><div class="pill">SECURE DOCUMENT WORKFLOW</div><h2>Semua pengajuan.<br><span>Satu alur kerja.</span></h2><p>Kelola proposal, foto dokumentasi, approval, dan SLA dalam satu workspace.</p>
-          <div class="feature-row"><span>✓</span> Approval berjenjang</div><div class="feature-row"><span>✓</span> Place-based access</div><div class="feature-row"><span>✓</span> Audit trail</div>
+
+  <div id="app">
+    <!-- Config Modal / Settings -->
+    <div id="config-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Pengaturan Backend API</h3>
+        <p>Masukkan Web App URL dari Deployment Google Apps Script:</p>
+        <input type="text" id="gas-url-input" placeholder="https://script.google.com/macros/s/.../exec">
+        <div class="modal-actions">
+          <button type="button" class="btn btn-primary" id="save-config-btn">Simpan & Lanjutkan</button>
         </div>
-        <form id="loginForm" class="glass-card">
-          <div class="card-icon">↗</div><h2>Masuk ke ADF</h2><p class="muted">Gunakan akun ADF Anda.</p>
-          <label>Username<input id="username" autocomplete="username" required placeholder="Masukkan username"></label>
-          <label>Password<input id="password" type="password" autocomplete="current-password" required placeholder="Masukkan password"></label>
-          <button class="primary full" type="submit">Login <span>→</span></button>
-          <div id="loginMessage" class="message" role="status"></div>
-          <p class="tiny">Sesi maksimal 12 jam. Login di perangkat lain akan menggantikan sesi sebelumnya.</p>
+      </div>
+    </div>
+
+    <!-- Login View -->
+    <div id="login-view" class="view-container">
+      <div class="login-card">
+        <div class="login-header">
+          <h2>ADF System</h2>
+          <p>Automatic Document Feeder System</p>
+        </div>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="login-username">Username (NIK / ID)</label>
+            <input type="text" id="login-username" required placeholder="Masukkan Username/NIK">
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" required placeholder="Masukkan Password">
+          </div>
+          <div id="login-error" class="alert alert-danger hidden"></div>
+          <button type="submit" class="btn btn-primary btn-block" id="login-btn">
+            <span>Masuk Aplikasi</span>
+          </button>
         </form>
-      </section>
-      <section id="appView" hidden>
-        <div id="notice" class="notice" hidden></div>
-        <div id="viewContent"></div>
-      </section>
-    </main>
+        <div class="login-footer">
+          <button type="button" class="btn-link" id="open-config-btn">Ubah Endpoint API</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Application View -->
+    <div id="main-view" class="view-container hidden">
+      <!-- Top Navbar -->
+      <header class="navbar">
+        <div class="nav-brand">ADF Mobile App</div>
+        <div class="user-info">
+          <span id="user-display-name">Nama User</span>
+          <span id="user-display-role" class="badge">ROLE</span>
+          <span id="user-display-place" class="badge badge-outline">PLACE</span>
+          <button id="logout-btn" class="btn btn-danger btn-sm">Logout</button>
+        </div>
+      </header>
+
+      <!-- Main Navigation Tabs -->
+      <nav class="tab-bar">
+        <button class="tab-btn active" data-tab="tab-dashboard">Dashboard</button>
+        <button class="tab-btn" data-tab="tab-form" id="nav-form-btn">Form Pendataan</button>
+        <button class="tab-btn" data-tab="tab-history">Riwayat & Approvals</button>
+      </nav>
+
+      <!-- Tab Contents -->
+      <main class="content-area">
+        <!-- Dashboard Tab -->
+        <section id="tab-dashboard" class="tab-content active">
+          <div class="section-header">
+            <h3>Ringkasan Aktivitas</h3>
+            <button class="btn btn-secondary btn-sm" id="refresh-dashboard-btn">Refresh</button>
+          </div>
+          <div class="card-grid">
+            <div class="stat-card">
+              <span class="stat-title">Total Transaksi</span>
+              <span class="stat-value" id="stat-total">0</span>
+            </div>
+            <div class="stat-card warning">
+              <span class="stat-title">Pending Approval</span>
+              <span class="stat-value" id="stat-pending">0</span>
+            </div>
+            <div class="stat-card danger">
+              <span class="stat-title">Sendback</span>
+              <span class="stat-value" id="stat-sendback">0</span>
+            </div>
+            <div class="stat-card success">
+              <span class="stat-title">Selesai (Completed)</span>
+              <span class="stat-value" id="stat-completed">0</span>
+            </div>
+            <div class="stat-card dark">
+              <span class="stat-title">SLA Overdue</span>
+              <span class="stat-value" id="stat-overdue">0</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Form Pendataan Tab -->
+        <section id="tab-form" class="tab-content">
+          <div class="card-form">
+            <h3>Form Pendataan Barang ADF</h3>
+            <form id="adf-transaction-form">
+              <div class="form-row">
+                <div class="form-group flex-2">
+                  <label for="form-search-sku">Cari Master (SKU / KLS / Artikel)</label>
+                  <div class="input-group">
+                    <input type="text" id="form-search-sku" placeholder="Ketik SKU/KLS lalu cari...">
+                    <button type="button" class="btn btn-secondary" id="btn-search-product">Cari</button>
+                  </div>
+                </div>
+                <div class="form-group flex-1">
+                  <label for="form-place">Lokasi / Place</label>
+                  <input type="text" id="form-place" readonly>
+                </div>
+              </div>
+
+              <div id="non-master-alert" class="alert alert-warning hidden">
+                Produk tidak ditemukan di Master Data. Didaftarkan sebagai <strong>Produk Non-Master</strong> (Wajib Validasi ADM).
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="form-sku">SKU</label>
+                  <input type="text" id="form-sku" placeholder="Nomor SKU">
+                </div>
+                <div class="form-group flex-2">
+                  <label for="form-deskripsi">Deskripsi Produk *</label>
+                  <input type="text" id="form-deskripsi" required placeholder="Deskripsi nama barang">
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="form-dept">Departemen</label>
+                  <input type="text" id="form-dept" placeholder="Dept">
+                </div>
+                <div class="form-group">
+                  <label for="form-commodity">Komoditas</label>
+                  <input type="text" id="form-commodity" placeholder="Commodity">
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="form-price">Harga Satuan (Rp) *</label>
+                  <input type="number" id="form-price" required min="0" value="0">
+                </div>
+                <div class="form-group">
+                  <label for="form-qty">Jumlah (Qty) *</label>
+                  <input type="number" id="form-qty" required min="1" value="1">
+                </div>
+                <div class="form-group">
+                  <label for="form-discount-percent">Diskon (%)</label>
+                  <input type="number" id="form-discount-percent" min="0" max="100" value="0">
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Total Promo: <strong id="calc-promo">Rp 0</strong></label>
+                </div>
+                <div class="form-group">
+                  <label>Potongan Diskon: <strong id="calc-discount">Rp 0</strong></label>
+                </div>
+                <div class="form-group">
+                  <label>Total Final: <strong id="calc-final">Rp 0</strong></label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="form-reason">Alasan Pengajuan</label>
+                <textarea id="form-reason" rows="2" placeholder="Alasan kerusakan / penyesuaian harga"></textarea>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="form-proposal">Nama Proposal</label>
+                  <input type="text" id="form-proposal" placeholder="Proposal">
+                </div>
+                <div class="form-group">
+                  <label for="form-docno">Nomor Dokumen Acuan</label>
+                  <input type="text" id="form-docno" placeholder="Doc No / Nota">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary btn-block" id="submit-trans-btn">Simpan & Ambil No. Transaksi</button>
+            </form>
+
+            <!-- Photo Upload Area (Active after transaction creation) -->
+            <div id="photo-upload-section" class="photo-section hidden">
+              <hr>
+              <h4>Dokumentasi Foto Wajib (Dengan Watermark GPS)</h4>
+              <p class="text-sm">Nomor Transaksi: <strong id="created-trans-no">-</strong></p>
+              <div class="photo-grid">
+                <div class="photo-box">
+                  <label>Foto 1 (Kondisi Barang)</label>
+                  <input type="file" id="photo-input-1" accept="image/*" capture="environment">
+                  <button type="button" class="btn btn-secondary btn-sm" id="upload-btn-1">Upload Foto 1</button>
+                  <span id="photo-status-1" class="text-sm text-muted">Belum ada foto</span>
+                </div>
+                <div class="photo-box">
+                  <label>Foto 2 (Tag Harga/Label)</label>
+                  <input type="file" id="photo-input-2" accept="image/*" capture="environment">
+                  <button type="button" class="btn btn-secondary btn-sm" id="upload-btn-2">Upload Foto 2</button>
+                  <span id="photo-status-2" class="text-sm text-muted">Belum ada foto</span>
+                </div>
+                <div class="photo-box">
+                  <label>Foto 3 (Pendukung/Area)</label>
+                  <input type="file" id="photo-input-3" accept="image/*" capture="environment">
+                  <button type="button" class="btn btn-secondary btn-sm" id="upload-btn-3">Upload Foto 3</button>
+                  <span id="photo-status-3" class="text-sm text-muted">Belum ada foto</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- History & Approvals Tab -->
+        <section id="tab-history" class="tab-content">
+          <div class="section-header">
+            <h3>Daftar Pengajuan Transaksi</h3>
+            <div class="filter-controls">
+              <select id="filter-status">
+                <option value="">-- Semua Status --</option>
+                <option value="PENDING_ADM">PENDING_ADM</option>
+                <option value="PENDING_MGR">PENDING_MGR</option>
+                <option value="PENDING_MSO">PENDING_MSO</option>
+                <option value="PENDING_BUYER">PENDING_BUYER</option>
+                <option value="PENDING_STORE">PENDING_STORE</option>
+                <option value="PENDING_BUYER_REVIEW">PENDING_BUYER_REVIEW</option>
+                <option value="PENDING_BUYER_FINAL">PENDING_BUYER_FINAL</option>
+                <option value="SENDBACK_STAFF">SENDBACK_STAFF</option>
+                <option value="COMPLETED">COMPLETED</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" id="refresh-history-btn">Reload</button>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>No. Transaksi</th>
+                  <th>Tanggal</th>
+                  <th>Lokasi</th>
+                  <th>SKU / Deskripsi</th>
+                  <th>Qty</th>
+                  <th>Final Amount</th>
+                  <th>Status</th>
+                  <th>SLA</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="transaction-table-body">
+                <tr><td colspan="9" class="text-center">Memuat data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Detail & Approval Modal -->
+    <div id="detail-modal" class="modal hidden">
+      <div class="modal-content modal-lg">
+        <div class="modal-header">
+          <h3>Detail Transaksi: <span id="modal-trans-no"></span></h3>
+          <button class="close-modal-btn">&times;</button>
+        </div>
+        <div class="modal-body" id="modal-detail-content">
+          <!-- Populated dynamically via JS -->
+        </div>
+        <div class="modal-footer" id="modal-action-footer">
+          <!-- Approval buttons injected based on Role and Status -->
+        </div>
+      </div>
+    </div>
+
   </div>
-  <dialog id="modal"><div class="modal-head"><div><div class="eyebrow">ADF FORM</div><h2 id="modalTitle">New Proposal</h2></div><button class="icon-btn" id="closeModal">×</button></div><div id="modalBody"></div></dialog>
-  <script src="app.js"></script>
+
+  <script src="apps.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('SW Registered:', reg.scope))
+          .catch(err => console.log('SW Registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>
