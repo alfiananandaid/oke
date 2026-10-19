@@ -2,8 +2,13 @@
  * Frontend Application Controller for Automatic Document Feeder (ADF)
  */
 
+// =========================================================================
+// TEMPATKAN URL WEB APP GOOGLE APPS SCRIPT ANDA DI SINI
+// =========================================================================
+const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbyNbnK394KydAVWXo9Ugc7Cuii5MDp2eDgHH2mwzzpcPSleoTD46FiA2lAQsQLSaJTT/exec";
+
 const APP_STATE = {
-  apiUrl: localStorage.getItem('adf_api_url') || '',
+  apiUrl: localStorage.getItem('adf_api_url') || (DEFAULT_GAS_URL !== "https://script.google.com/macros/s/AKfycbyNbnK394KydAVWXo9Ugc7Cuii5MDp2eDgHH2mwzzpcPSleoTD46FiA2lAQsQLSaJTT/exec" ? DEFAULT_GAS_URL : ''),
   token: localStorage.getItem('adf_token') || '',
   user: JSON.parse(localStorage.getItem('adf_user') || 'null'),
   deviceId: getDeviceId(),
@@ -11,7 +16,7 @@ const APP_STATE = {
   activeTransNo: null
 };
 
-// Generate or retrieve persistent Device ID (One session per account requirement)
+// Generate or retrieve persistent Device ID
 function getDeviceId() {
   let devId = localStorage.getItem('adf_device_id');
   if (!devId) {
@@ -28,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
-  if (!APP_STATE.apiUrl) {
+  if (!APP_STATE.apiUrl || APP_STATE.apiUrl === "PASANG_URL_WEB_APP_GAS_ANDA_DI_SINI") {
     showModal('config-modal');
     return;
   }
@@ -99,7 +104,9 @@ function setupEventListeners() {
 
 /** API Communication Helper */
 async function apiPost(action, payload = {}) {
-  if (!APP_STATE.apiUrl) throw new Error('API Endpoint belum dikonfigurasi.');
+  if (!APP_STATE.apiUrl || APP_STATE.apiUrl === "PASANG_URL_WEB_APP_GAS_ANDA_DI_SINI") {
+    throw new Error('API Endpoint belum dikonfigurasi.');
+  }
   
   const bodyData = {
     action: action,
@@ -111,7 +118,7 @@ async function apiPost(action, payload = {}) {
   try {
     const response = await fetch(APP_STATE.apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Avoid CORS preflight in GAS
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(bodyData)
     });
     const result = await response.json();
@@ -425,7 +432,6 @@ async function loadTransactions() {
       </tr>
     `).join('');
     
-    // Store globally for detail modal lookup
     window.lastFetchedTransactions = res.transactions;
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">Gagal memuat: ${err.message}</td></tr>`;
@@ -473,7 +479,6 @@ function openDetailModal(transNo) {
     </div>
   `;
 
-  // Dynamic Approval Form Render based on User Role & Transaction Status
   footer.innerHTML = renderApprovalControls(item);
   showModal('detail-modal');
 }
@@ -484,7 +489,6 @@ function renderApprovalControls(item) {
 
   let html = `<div class="form-group flex-1" style="margin-bottom:0">`;
 
-  // Standard Approval Phase (ADM, MGR, MSO, BUYER)
   if ((role === 'ADM' && status === 'PENDING_ADM') ||
       (role === 'MGR' && status === 'PENDING_MGR') ||
       (role === 'MSO' && status === 'PENDING_MSO')) {
