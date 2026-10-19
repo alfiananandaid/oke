@@ -1,178 +1,594 @@
-/* ADF frontend. Configure API_BASE to a secure HTTPS proxy that forwards to Apps Script. */
-const API_BASE = 'https://script.google.com/macros/s/AKfycbxOa_H_6dQKzV6nx9-Xjujc9_tpaKu-2ws_gi6C4xRvWpYearDS73iFxvKG2bm2wvzy/exec'; // Example: https://your-proxy.example.com/api
-const STORAGE_TOKEN = 'adf_session_token';
-const STORAGE_DEVICE = 'adf_device_id';
-let currentUser = null;
-let productCache = null;
+/**
+ * Frontend Application Controller for Automatic Document Feeder (ADF)
+ */
 
-const $ = id => document.getElementById(id);
-function deviceId() {
-  let id = localStorage.getItem(STORAGE_DEVICE);
-  if (!id) { id = crypto.randomUUID ? crypto.randomUUID() : 'dev-' + Math.random().toString(36).slice(2) + Date.now(); localStorage.setItem(STORAGE_DEVICE,id); }
-  return id;
+const APP_STATE = {
+  apiUrl: localStorage.getItem('adf_api_url') || '',
+  token: localStorage.getItem('adf_token') || '',
+  user: JSON.parse(localStorage.getItem('adf_user') || 'null'),
+  deviceId: getDeviceId(),
+  sessionTimer: null,
+  activeTransNo: null
+};
+
+// Generate or retrieve persistent Device ID (One session per account requirement)
+function getDeviceId() {
+  let devId = localStorage.getItem('adf_device_id');
+  if (!devId) {
+    devId = 'DEV-' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    localStorage.setItem('adf_device_id', devId);
+  }
+  return devId;
 }
-async function api(action, extra={}) {
-  if (!API_BASE) throw new Error('API belum dikonfigurasi. Isi API_BASE di app.js setelah backend/proxy dipasang.');
-  const res = await fetch(API_BASE, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({action,token:localStorage.getItem(STORAGE_TOKEN)||'',deviceId:deviceId(),...extra})
+
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
+  setupEventListeners();
+  setupAutoLogoutCheck();
+});
+
+function initApp() {
+  if (!APP_STATE.apiUrl) {
+    showModal('config-modal');
+    return;
+  }
+
+  if (APP_STATE.token && APP_STATE.user) {
+    validateSession();
+  } else {
+    showView('login-view');
+  }
+}
+
+function setupEventListeners() {
+  // Config Modal
+  document.getElementById('save-config-btn').addEventListener('click', () => {
+    const url = document.getElementById('gas-url-input').value.trim();
+    if (!url || !url.startsWith('https://script.google.com/')) {
+      alert('Masukkan URL Google Apps Script Web App yang valid.');
+      return;
+    }
+    APP_STATE.apiUrl = url;
+    localStorage.setItem('adf_api_url', url);
+    hideModal('config-modal');
+    initApp();
   });
-  const data = await res.json();
-  if (!res.ok || data.ok === false) throw new Error(data.error || 'Permintaan gagal.');
-  return data;
+
+  document.getElementById('open-config-btn').addEventListener('click', () => {
+    document.getElementById('gas-url-input').value = APP_STATE.apiUrl;
+    showModal('config-modal');
+  });
+
+  // Login & Logout
+  document.getElementById('login-form').addEventListener('submit', handleLogin);
+  document.getElementById('logout-btn').addEventListener('click', handleLogout);
+
+  // Navigation Tabs
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      switchTab(e.target.dataset.tab);
+    });
+  });
+
+  // Product Search in Form
+  document.getElementById('btn-search-product').addEventListener('click', handleProductSearch);
+
+  // Form Field Calculations
+  ['form-price', 'form-qty', 'form-discount-percent'].forEach(id => {
+    document.getElementById(id).addEventListener('input', calculateFormTotals);
+  });
+
+  // Transaction Creation
+  document.getElementById('adf-transaction-form').addEventListener('submit', handleCreateTransaction);
+
+  // Photo Upload Buttons
+  [1, 2, 3].forEach(idx => {
+    document.getElementById(`upload-btn-${idx}`).addEventListener('click', () => handlePhotoUpload(idx));
+  });
+
+  // History & Refresh
+  document.getElementById('refresh-dashboard-btn').addEventListener('click', loadDashboard);
+  document.getElementById('refresh-history-btn').addEventListener('click', loadTransactions);
+  document.getElementById('filter-status').addEventListener('change', loadTransactions);
+
+  // Modal Close Buttons
+  document.querySelectorAll('.close-modal-btn').forEach(btn => {
+    btn.addEventListener('click', () => hideModal('detail-modal'));
+  });
 }
-function showLogin() {
-  $('loginView').hidden=false; $('appView').hidden=true; $('nav').hidden=true; $('userChip').hidden=true;
-}
-function showApp() {
-  $('loginView').hidden=true; $('appView').hidden=false; $('nav').hidden=false; $('userChip').hidden=false;
-  $('userName').textContent=currentUser.Nama||currentUser.Username;
-  $('userRole').textContent=`${currentUser.Role} · ${currentUser.Place}`;
-  $('avatar').textContent=(currentUser.Nama||currentUser.Username||'A').slice(0,1).toUpperCase();
-  $('connectionLabel').textContent='Session active';
-  renderDashboard();
-}
-$('loginForm').addEventListener('submit', async e=>{
-  e.preventDefault(); $('loginMessage').textContent='Memeriksa akun…';
-  try {
-    const result=await api('login',{username:$('username').value.trim(),password:$('password').value,deviceId:deviceId()});
-    localStorage.setItem(STORAGE_TOKEN,result.token); currentUser=result.user;
-    $('password').value=''; $('loginMessage').textContent=''; showApp();
-  } catch(err) { $('loginMessage').textContent=err.message; }
-});
-$('logoutBtn').addEventListener('click', async()=>{
-  try { await api('logout'); } catch(e) {}
-  localStorage.removeItem(STORAGE_TOKEN); currentUser=null; showLogin();
-});
-$('nav').addEventListener('click', e=>{
-  const b=e.target.closest('[data-view]'); if(!b)return;
-  document.querySelectorAll('.nav-item').forEach(x=>x.classList.toggle('active',x===b));
-  if(b.dataset.view==='dashboard') renderDashboard();
-  if(b.dataset.view==='new') openNewForm();
-  if(b.dataset.view==='mine') renderTransactions('mine');
-  if(b.dataset.view==='approval') renderTransactions('approval');
-});
-async function boot() {
-  const token=localStorage.getItem(STORAGE_TOKEN);
-  if(!token){showLogin();return;}
-  try { const r=await api('me'); currentUser=r.user; showApp(); }
-  catch(e){localStorage.removeItem(STORAGE_TOKEN);showLogin();}
-}
-async function renderDashboard() {
-  $('pageTitle').textContent='Dashboard';
-  $('viewContent').innerHTML=`<div class="section-head"><div><h2>Ringkasan pengajuan</h2><p class="muted">Pantau status transaksi dan SLA Anda.</p></div><button class="primary" id="newBtn">＋ New Proposal</button></div><div class="stats" id="stats"><div class="stat-card">Loading…</div></div><div class="panel"><div class="section-head"><h2>Transaksi terbaru</h2><button class="secondary" id="viewAllBtn">Lihat semua</button></div><div id="recentTable" class="empty">Memuat data…</div></div>`;
-  $('newBtn').onclick=openNewForm; $('viewAllBtn').onclick=()=>renderTransactions('mine');
-  try {
-    const [d,t]=await Promise.all([api('dashboard'),api('listTransactions')]);
-    const c=d.counts;
-    $('stats').innerHTML=[
-      ['Total pengajuan',c.total,'Semua transaksi yang dapat Anda akses','▤'],
-      ['Menunggu approval',c.pending,'Sedang dalam proses','◷'],
-      ['Sendback',c.sendback,'Perlu perhatian atau revisi','↶'],
-      ['SLA terlambat',c.overdue,'Periksa antrean yang tertunda','!']
-    ].map(x=>`<div class="stat-card"><div class="stat-top"><span>${x[0]}</span><span class="stat-icon">${x[3]}</span></div><div class="stat-value">${x[1]}</div><div class="stat-note">${x[2]}</div></div>`).join('');
-    $('recentTable').innerHTML=tableHTML(t.transactions.slice(0,8));
-  } catch(e) { $('recentTable').innerHTML=`<div class="empty">${escapeHtml(e.message)}</div>`; }
-}
-async function renderTransactions(mode) {
-  $('pageTitle').textContent=mode==='approval'?'Approval Center':'My Submission';
-  $('viewContent').innerHTML=`<div class="section-head"><div><h2>${mode==='approval'?'Antrean approval':'Riwayat pengajuan'}</h2><p class="muted">Data dibatasi sesuai role dan Place akun.</p></div><button class="primary" id="newBtn">＋ New Proposal</button></div><div class="panel"><div id="transactions" class="empty">Memuat data…</div></div>`;
-  $('newBtn').onclick=openNewForm;
-  try {
-    const r=await api('listTransactions');
-    let rows=r.transactions;
-    if(mode==='approval') rows=rows.filter(x=>isMyQueue(x.Status,currentUser.Role));
-    $('transactions').innerHTML=tableHTML(rows);
-    document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openTransaction(b.dataset.open));
-  } catch(e){$('transactions').innerHTML=`<div class="empty">${escapeHtml(e.message)}</div>`;}
-}
-function isMyQueue(status,role) {
-  return ({ADM:['PENDING_ADM'],MGR:['PENDING_MGR'],MSO:['PENDING_MSO'],BUYER:['PENDING_BUYER','PENDING_BUYER_REVIEW','PENDING_BUYER_FINAL']})[role]?.includes(status)||false;
-}
-function tableHTML(rows) {
-  if(!rows||!rows.length)return '<div class="empty">Belum ada transaksi.</div>';
-  return `<div class="table-wrap"><table><thead><tr><th>TransNo</th><th>Date</th><th>Place</th><th>Product</th><th>Status</th><th>SLA</th><th></th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${escapeHtml(r.TransNo)}</b></td><td>${escapeHtml(formatDate(r.Date))}</td><td>${escapeHtml(r.Place)}</td><td>${escapeHtml(r.SKU||r.Deskripsi||'—')}</td><td><span class="status ${r.Status==='COMPLETED'?'done':''}">${escapeHtml(r.Status)}</span></td><td><span class="status ${r.SLAStatus==='OVERDUE'?'overdue':''}">${escapeHtml(r.SLAStatus||'—')}</span></td><td><button class="secondary" data-open="${escapeHtml(r.TransNo)}">Detail</button></td></tr>`).join('')}</tbody></table></div>`;
-}
-function openNewForm() {
-  $('modalTitle').textContent='New Proposal';
-  $('modalBody').innerHTML=`<form id="proposalForm">
-    <div class="form-grid">
-      <label class="wide">SKU / KLS / Artikel <input id="productSearch" placeholder="Scan barcode atau ketik kode produk" autocomplete="off" required><span class="help">Hasil akan divalidasi ulang oleh backend saat disimpan.</span></label>
-      <div class="wide"><button type="button" class="secondary" id="lookupBtn">Cari DataMaster</button><div id="productResult" class="product-result">Belum ada produk dipilih.</div></div>
-      <label>Qty<input id="qty" type="number" min="1" step="1" value="1" required></label>
-      <label>Discount (%)<input id="discount" type="number" min="0" max="100" step=".01" value="0"></label>
-      <label>Proposal<select id="proposal"><option value="">Pilih proposal</option><option>Promo</option><option>Clearance</option></select></label>
-      <label>DocNo<input id="docNo" placeholder="Nomor dokumen (opsional)"></label>
-      <label class="wide">Reason<textarea id="reason" rows="3" required placeholder="Jelaskan alasan pengajuan"></textarea></label>
-      <label class="wide">Jika produk tidak ditemukan, deskripsi manual<input id="manualDescription" placeholder="Diisi jika non-master"></label>
-      <label>Dept manual<input id="manualDept" placeholder="Dept"></label>
-      <label>Commodity manual<input id="manualCommodity" placeholder="Commodity"></label>
-      <label>Price manual<input id="manualPrice" type="number" min="0" step=".01" placeholder="Harga"></label>
-      <label class="wide"><span class="help">Produk non-master ditandai otomatis dan wajib divalidasi ADM. Harga manual bukan data master.</span></label>
-    </div>
-    <div class="photo-box"><b>Foto dokumentasi (opsional saat draft awal)</b><p class="help">Unggah setelah transaksi tersimpan agar file dikaitkan ke folder transaksi. Watermark server-side permanen memerlukan image compositor yang dikonfigurasi.</p></div>
-    <div class="action-row" style="margin-top:22px"><button class="primary" type="submit">Simpan pengajuan</button><button class="secondary" type="button" id="cancelForm">Batal</button></div>
-    <div id="formMessage" class="message"></div>
-  </form>`;
-  productCache=null;
-  $('modal').showModal();
-  $('closeModal').onclick=()=>$('modal').close();
-  $('cancelForm').onclick=()=>$('modal').close();
-  $('lookupBtn').onclick=lookupProduct;
-  $('productSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();lookupProduct();}});
-  $('proposalForm').onsubmit=submitProposal;
-}
-async function lookupProduct() {
-  const q=$('productSearch').value.trim(); if(!q)return;
-  $('productResult').textContent='Mencari…';
-  try {
-    const r=await api('searchProduct',{query:q}); productCache=r.product||null;
-    if(productCache) {
-      $('productResult').innerHTML=`<b>${escapeHtml(productCache.SKU)}</b> · ${escapeHtml(productCache['Deskripsi Produk'])}<br>Dept: ${escapeHtml(productCache.Dept)} · Commodity: ${escapeHtml(productCache.Commodity)}<br>Price: ${escapeHtml(productCache.Price)}`;
-      $('manualDescription').value=productCache['Deskripsi Produk']||'';
-    } else $('productResult').textContent='Produk tidak ditemukan. Lengkapi data manual; ADM wajib memvalidasi.';
-  } catch(e){$('productResult').textContent=e.message;}
-}
-async function submitProposal(e) {
-  e.preventDefault(); const msg=$('formMessage'); msg.textContent='Menyimpan…';
-  const master=productCache;
-  const data={
-    Place:currentUser.Place,SKU:master?master.SKU:$('productSearch').value.trim(),
-    Deskripsi:master?master['Deskripsi Produk']:$('manualDescription').value.trim(),
-    Dept:master?master.Dept:$('manualDept').value.trim(),
-    Commodity:master?master.Commodity:$('manualCommodity').value.trim(),
-    Price:master?Number(master.Price):Number($('manualPrice').value||0),
-    Qty:Number($('qty').value),DiscountPercent:Number($('discount').value||0),
-    Proposal:$('proposal').value,DocNo:$('docNo').value.trim(),Reason:$('reason').value.trim(),
-    IsNonMaster:!master
+
+/** API Communication Helper */
+async function apiPost(action, payload = {}) {
+  if (!APP_STATE.apiUrl) throw new Error('API Endpoint belum dikonfigurasi.');
+  
+  const bodyData = {
+    action: action,
+    token: APP_STATE.token,
+    deviceId: APP_STATE.deviceId,
+    ...payload
   };
+
   try {
-    const r=await api('createTransaction',{data});
-    msg.textContent='Tersimpan: '+r.transaction.TransNo;
-    setTimeout(()=>{$('modal').close();renderDashboard();},700);
-  } catch(err){msg.textContent=err.message;}
+    const response = await fetch(APP_STATE.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Avoid CORS preflight in GAS
+      body: JSON.stringify(bodyData)
+    });
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.error || 'Terjadi kesalahan pada server.');
+    return result;
+  } catch (err) {
+    console.error(`API Error [${action}]:`, err);
+    throw err;
+  }
 }
-async function openTransaction(transNo) {
+
+/** Authentication Logic */
+async function handleLogin(e) {
+  e.preventDefault();
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errorEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-btn');
+
+  errorEl.classList.add('hidden');
+  btn.disabled = true;
+
   try {
-    const r=await api('listTransactions'); const t=r.transactions.find(x=>x.TransNo===transNo); if(!t)throw new Error('Transaksi tidak ditemukan.');
-    $('modalTitle').textContent=transNo;
-    $('modalBody').innerHTML=`<div class="product-result"><b>Status:</b> ${escapeHtml(t.Status)}<br><b>Produk:</b> ${escapeHtml(t.SKU)} · ${escapeHtml(t.Deskripsi)}<br><b>Qty:</b> ${escapeHtml(t.Qty)} · <b>Final Amount:</b> ${escapeHtml(t.FinalAmount)}<br><b>Reason:</b> ${escapeHtml(t.Reason)}<br><b>Place:</b> ${escapeHtml(t.Place)}<br><b>Folder:</b> ${t['Link Folder']?`<a href="${escapeHtml(t['Link Folder'])}" target="_blank" rel="noopener">Buka folder Drive</a>`:'—'}</div>
-    <form id="decisionForm"><label>Feedback<textarea id="decisionFeedback" rows="3" placeholder="Wajib saat sendback"></textarea></label>
-    <label>Buyer decision (jika BUYER)<select id="buyerDecision"><option value="">Pilih keputusan</option><option value="Approve Discount">Approve Discount</option><option value="WO">WO</option><option value="Reject">Reject</option></select></label>
-    <div class="action-row" style="margin-top:18px"><button class="primary" type="button" id="approveBtn">Approve / Submit</button><button class="secondary" type="button" id="sendbackBtn">Sendback</button></div><div id="decisionMessage" class="message"></div></form>`;
-    $('modal').showModal(); $('closeModal').onclick=()=>$('modal').close();
-    $('approveBtn').onclick=()=>submitDecision(t,'approve');
-    $('sendbackBtn').onclick=()=>submitDecision(t,'sendback');
-  } catch(e){alert(e.message);}
+    const res = await apiPost('login', { username, password });
+    APP_STATE.token = res.token;
+    APP_STATE.user = res.user;
+    localStorage.setItem('adf_token', res.token);
+    localStorage.setItem('adf_user', JSON.stringify(res.user));
+    
+    renderUserInfo();
+    showView('main-view');
+    loadDashboard();
+    loadTransactions();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
 }
-async function submitDecision(t,action) {
-  const feedback=$('decisionFeedback').value.trim(), msg=$('decisionMessage');
+
+async function validateSession() {
   try {
-    const r=await api(action,{TransNo:t.TransNo,feedback,buyerNote:feedback,buyerDecision:$('buyerDecision').value});
-    msg.textContent='Status baru: '+r.Status; setTimeout(()=>{$('modal').close();renderDashboard();},700);
-  } catch(e){msg.textContent=e.message;}
+    const res = await apiPost('me');
+    APP_STATE.user = res.user;
+    localStorage.setItem('adf_user', JSON.stringify(res.user));
+    renderUserInfo();
+    showView('main-view');
+    loadDashboard();
+    loadTransactions();
+  } catch (err) {
+    console.warn('Session expired or invalid:', err.message);
+    clearSession();
+    showView('login-view');
+  }
 }
-function formatDate(d){if(!d)return '—';const dt=new Date(d);return isNaN(dt)?String(d):dt.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});}
-function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-$('closeModal').onclick=()=>$('modal').close();
-showLogin();
+
+async function handleLogout() {
+  try {
+    if (APP_STATE.token) await apiPost('logout');
+  } catch (e) {
+    console.log('Logout cleanup error:', e);
+  } finally {
+    clearSession();
+    showView('login-view');
+  }
+}
+
+function clearSession() {
+  APP_STATE.token = '';
+  APP_STATE.user = null;
+  localStorage.removeItem('adf_token');
+  localStorage.removeItem('adf_user');
+}
+
+/** Enforce 12-Hour Client Auto Logout Check */
+function setupAutoLogoutCheck() {
+  if (APP_STATE.sessionTimer) clearInterval(APP_STATE.sessionTimer);
+  APP_STATE.sessionTimer = setInterval(() => {
+    if (APP_STATE.token) {
+      validateSession();
+    }
+  }, 10 * 60 * 1000); // Check every 10 minutes
+}
+
+/** UI Renderers */
+function showView(viewId) {
+  document.querySelectorAll('.view-container').forEach(v => v.classList.add('hidden'));
+  document.getElementById(viewId).classList.remove('hidden');
+}
+
+function showModal(modalId) { document.getElementById(modalId).classList.remove('hidden'); }
+function hideModal(modalId) { document.getElementById(modalId).classList.add('hidden'); }
+
+function renderUserInfo() {
+  if (!APP_STATE.user) return;
+  document.getElementById('user-display-name').textContent = APP_STATE.user.Nama || APP_STATE.user.Username;
+  document.getElementById('user-display-role').textContent = APP_STATE.user.Role;
+  document.getElementById('user-display-place').textContent = APP_STATE.user.Place;
+  document.getElementById('form-place').value = APP_STATE.user.Place;
+
+  // Role visibility permissions
+  const role = String(APP_STATE.user.Role).toUpperCase();
+  const formBtn = document.getElementById('nav-form-btn');
+  if (['STAFF', 'ADM'].includes(role)) {
+    formBtn.classList.remove('hidden');
+  } else {
+    formBtn.classList.add('hidden');
+  }
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+  const activeBtn = document.querySelector(`[data-tab="${tabId}"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+
+  if (tabId === 'tab-dashboard') loadDashboard();
+  if (tabId === 'tab-history') loadTransactions();
+}
+
+/** Product Search & Form Calculations */
+async function handleProductSearch() {
+  const query = document.getElementById('form-search-sku').value.trim();
+  if (!query) return;
+
+  const alertBox = document.getElementById('non-master-alert');
+  alertBox.classList.add('hidden');
+
+  try {
+    const res = await apiPost('searchProduct', { query });
+    if (res.product) {
+      document.getElementById('form-sku').value = res.product.SKU || '';
+      document.getElementById('form-deskripsi').value = res.product['Deskripsi Produk'] || '';
+      document.getElementById('form-dept').value = res.product.Dept || '';
+      document.getElementById('form-commodity').value = res.product.Commodity || '';
+      document.getElementById('form-price').value = res.product.Price || 0;
+      calculateFormTotals();
+    } else {
+      alertBox.classList.remove('hidden');
+      document.getElementById('form-sku').value = query;
+      document.getElementById('form-deskripsi').value = '';
+    }
+  } catch (err) {
+    alert('Gagal mencari produk: ' + err.message);
+  }
+}
+
+function calculateFormTotals() {
+  const price = parseFloat(document.getElementById('form-price').value) || 0;
+  const qty = parseFloat(document.getElementById('form-qty').value) || 0;
+  const discPct = Math.min(100, Math.max(0, parseFloat(document.getElementById('form-discount-percent').value) || 0));
+
+  const promoAmount = price * qty;
+  const discountAmount = promoAmount * (discPct / 100);
+  const finalAmount = promoAmount - discountAmount;
+
+  document.getElementById('calc-promo').textContent = formatRp(promoAmount);
+  document.getElementById('calc-discount').textContent = formatRp(discountAmount);
+  document.getElementById('calc-final').textContent = formatRp(finalAmount);
+}
+
+function formatRp(num) {
+  return 'Rp ' + Number(num).toLocaleString('id-ID');
+}
+
+/** Transaction Creation & Photo Uploads */
+async function handleCreateTransaction(e) {
+  e.preventDefault();
+  const alertBox = document.getElementById('non-master-alert');
+  const isNonMaster = !alertBox.classList.contains('hidden');
+
+  const payload = {
+    data: {
+      Place: document.getElementById('form-place').value,
+      SKU: document.getElementById('form-sku').value.trim(),
+      Deskripsi: document.getElementById('form-deskripsi').value.trim(),
+      Dept: document.getElementById('form-dept').value.trim(),
+      Commodity: document.getElementById('form-commodity').value.trim(),
+      Price: parseFloat(document.getElementById('form-price').value) || 0,
+      Qty: parseFloat(document.getElementById('form-qty').value) || 1,
+      DiscountPercent: parseFloat(document.getElementById('form-discount-percent').value) || 0,
+      Reason: document.getElementById('form-reason').value.trim(),
+      Proposal: document.getElementById('form-proposal').value.trim(),
+      DocNo: document.getElementById('form-docno').value.trim(),
+      IsNonMaster: isNonMaster ? 'true' : 'false'
+    }
+  };
+
+  const btn = document.getElementById('submit-trans-btn');
+  btn.disabled = true;
+
+  try {
+    const res = await apiPost('createTransaction', payload);
+    APP_STATE.activeTransNo = res.transaction.TransNo;
+    document.getElementById('created-trans-no').textContent = res.transaction.TransNo;
+    document.getElementById('photo-upload-section').classList.remove('hidden');
+    alert(`Transaksi ${res.transaction.TransNo} berhasil dibuat! Silakan upload foto pendukung.`);
+  } catch (err) {
+    alert('Gagal membuat transaksi: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function handlePhotoUpload(index) {
+  if (!APP_STATE.activeTransNo) {
+    alert('Buat transaksi terlebih dahulu sebelum mengupload foto.');
+    return;
+  }
+
+  const fileInput = document.getElementById(`photo-input-${index}`);
+  if (!fileInput.files || !fileInput.files[0]) {
+    alert(`Pilih file foto untuk Foto ${index}.`);
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const btn = document.getElementById(`upload-btn-${index}`);
+  const statusSpan = document.getElementById(`photo-status-${index}`);
+
+  btn.disabled = true;
+  statusSpan.textContent = 'Mendapatkan lokasi GPS & memproses...';
+
+  try {
+    const coords = await getCurrentLocation();
+    const dataUrl = await fileToDataUrl(file);
+
+    const res = await apiPost('uploadPhoto', {
+      TransNo: APP_STATE.activeTransNo,
+      index: index,
+      dataUrl: dataUrl,
+      latitude: coords.latitude,
+      longitude: coords.longitude
+    });
+
+    statusSpan.textContent = `Uploaded (File ID: ${res.fileId.slice(0, 8)}...)`;
+    statusSpan.style.color = '#16a34a';
+  } catch (err) {
+    statusSpan.textContent = 'Gagal upload';
+    statusSpan.style.color = '#dc2626';
+    alert('Gagal upload foto: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = err => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
+function getCurrentLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve({ latitude: 'unavailable', longitude: 'unavailable' });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => resolve({ latitude: 'unavailable', longitude: 'unavailable' }),
+      { timeout: 8000, enableHighAccuracy: true }
+    );
+  });
+}
+
+/** Dashboard & History Loaders */
+async function loadDashboard() {
+  try {
+    const res = await apiPost('dashboard');
+    const c = res.counts;
+    document.getElementById('stat-total').textContent = c.total || 0;
+    document.getElementById('stat-pending').textContent = c.pending || 0;
+    document.getElementById('stat-sendback').textContent = c.sendback || 0;
+    document.getElementById('stat-completed').textContent = c.completed || 0;
+    document.getElementById('stat-overdue').textContent = c.overdue || 0;
+  } catch (err) {
+    console.error('Failed to load dashboard:', err);
+  }
+}
+
+async function loadTransactions() {
+  const tbody = document.getElementById('transaction-table-body');
+  const statusFilter = document.getElementById('filter-status').value;
+  tbody.innerHTML = '<tr><td colspan="9" class="text-center">Memuat data...</td></tr>';
+
+  try {
+    const res = await apiPost('listTransactions', { status: statusFilter });
+    if (!res.transactions || res.transactions.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center">Tidak ada transaksi ditemukan.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = res.transactions.map(item => `
+      <tr>
+        <td><strong>${item.TransNo}</strong></td>
+        <td>${item.Date ? String(item.Date).slice(0, 10) : '-'}</td>
+        <td>${item.Place}</td>
+        <td>${item.SKU || '-'}<br><span class="text-sm text-muted">${item.Deskripsi || ''}</span></td>
+        <td>${item.Qty}</td>
+        <td>${formatRp(item.FinalAmount || 0)}</td>
+        <td><span class="badge">${item.Status}</span></td>
+        <td><span class="badge ${item.SLAStatus === 'OVERDUE' ? 'badge-danger' : ''}">${item.SLAStatus || 'ON_TRACK'}</span></td>
+        <td><button class="btn btn-secondary btn-sm" onclick="openDetailModal('${item.TransNo}')">Detail</button></td>
+      </tr>
+    `).join('');
+    
+    // Store globally for detail modal lookup
+    window.lastFetchedTransactions = res.transactions;
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger">Gagal memuat: ${err.message}</td></tr>`;
+  }
+}
+
+/** Transaction Detail & Approval Workflows */
+function openDetailModal(transNo) {
+  const list = window.lastFetchedTransactions || [];
+  const item = list.find(t => t.TransNo === transNo);
+  if (!item) return;
+
+  document.getElementById('modal-trans-no').textContent = item.TransNo;
+  const body = document.getElementById('modal-detail-content');
+  const footer = document.getElementById('modal-action-footer');
+
+  body.innerHTML = `
+    <div class="form-row">
+      <div class="form-group flex-1"><strong>Pemohon:</strong> ${item.Nama} (${item.Username})</div>
+      <div class="form-group flex-1"><strong>Lokasi:</strong> ${item.Place}</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group flex-1"><strong>SKU:</strong> ${item.SKU || '-'}</div>
+      <div class="form-group flex-2"><strong>Deskripsi:</strong> ${item.Deskripsi}</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group flex-1"><strong>Harga:</strong> ${formatRp(item.Price)}</div>
+      <div class="form-group flex-1"><strong>Qty:</strong> ${item.Qty}</div>
+      <div class="form-group flex-1"><strong>Diskon:</strong> ${item.DiscountPercent}%</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group flex-1"><strong>Total Final:</strong> ${formatRp(item.FinalAmount)}</div>
+      <div class="form-group flex-1"><strong>Status:</strong> ${item.Status}</div>
+    </div>
+    <hr>
+    <div class="form-group">
+      <strong>Catatan Approval Sebelumnya:</strong>
+      <div class="text-sm">
+        ${item.ADMFeedback ? `<p><strong>ADM:</strong> \${item.ADMFeedback}</p>` : ''}
+        ${item.MGRFeedback ? `<p><strong>MGR:</strong> \${item.MGRFeedback}</p>` : ''}
+        ${item.MSOFeedback ? `<p><strong>MSO:</strong> \${item.MSOFeedback}</p>` : ''}
+        ${item['Buyer Note'] ? `<p><strong>Buyer Note:</strong> \${item['Buyer Note']}</p>` : ''}
+        ${item.StoreFeedback ? `<p><strong>Store Feedback:</strong> \${item.StoreFeedback}</p>` : ''}
+      </div>
+    </div>
+  `;
+
+  // Dynamic Approval Form Render based on User Role & Transaction Status
+  footer.innerHTML = renderApprovalControls(item);
+  showModal('detail-modal');
+}
+
+function renderApprovalControls(item) {
+  const role = String(APP_STATE.user.Role).toUpperCase();
+  const status = String(item.Status);
+
+  let html = `<div class="form-group flex-1" style="margin-bottom:0">`;
+
+  // Standard Approval Phase (ADM, MGR, MSO, BUYER)
+  if ((role === 'ADM' && status === 'PENDING_ADM') ||
+      (role === 'MGR' && status === 'PENDING_MGR') ||
+      (role === 'MSO' && status === 'PENDING_MSO')) {
+    html += `
+      <input type="text" id="action-feedback" placeholder="Masukkan catatan feedback / alasan..." style="margin-bottom:0.5rem; width:100%">
+      <div>
+        <button class="btn btn-success btn-sm" onclick="executeTransition('${item.TransNo}', 'approve')">Approve</button>
+        <button class="btn btn-danger btn-sm" onclick="executeTransition('${item.TransNo}', 'sendback')">Sendback</button>
+      </div>
+    `;
+  } else if (role === 'BUYER' && status === 'PENDING_BUYER') {
+    html += `
+      <input type="text" id="buyer-note" placeholder="Buyer Note..." style="margin-bottom:0.3rem; width:100%">
+      <input type="text" id="buyer-caused-by" placeholder="Caused By..." style="margin-bottom:0.3rem; width:100%">
+      <select id="buyer-decision" style="margin-bottom:0.5rem; width:100%">
+        <option value="APPROVE_DISCOUNT">Approve Discount</option>
+        <option value="WRITE_OFF">Write Off (WO)</option>
+      </select>
+      <div>
+        <button class="btn btn-success btn-sm" onclick="executeBuyerApprove('${item.TransNo}')">Approve ke Store</button>
+        <button class="btn btn-danger btn-sm" onclick="executeTransition('${item.TransNo}', 'sendback')">Sendback</button>
+      </div>
+    `;
+  } else if (['STAFF', 'ADM'].includes(role) && ['PENDING_STORE', 'SENDBACK_STAFF'].includes(status)) {
+    html += `
+      <input type="text" id="store-trans-no" placeholder="No. Transaksi Kasir Store (Wajib jika Accept)" style="margin-bottom:0.3rem; width:100%">
+      <input type="text" id="store-feedback" placeholder="Feedback / Alasan Keberatan" style="margin-bottom:0.5rem; width:100%">
+      <div>
+        <button class="btn btn-success btn-sm" onclick="executeStoreFeedback('${item.TransNo}', 'accept')">Store Accept</button>
+        <button class="btn btn-warning btn-sm" onclick="executeStoreFeedback('${item.TransNo}', 'object')">Keberatan (Object)</button>
+      </div>
+    `;
+  } else if (role === 'BUYER' && ['PENDING_BUYER_REVIEW', 'PENDING_BUYER_FINAL'].includes(status)) {
+    html += `
+      <input type="text" id="buyer-final-note" placeholder="Catatan Keputusan Final..." style="margin-bottom:0.5rem; width:100%">
+      <div>
+        ${status === 'PENDING_BUYER_REVIEW' ? `
+          <button class="btn btn-primary btn-sm" onclick="executeBuyerFinal('\${item.TransNo}', 'accept')">Terima Keberatan</button>
+          <button class="btn btn-warning btn-sm" onclick="executeBuyerFinal('\${item.TransNo}', 'revise')">Minta Revisi</button>
+        ` : `
+          <button class="btn btn-success btn-sm" onclick="executeBuyerFinal('\${item.TransNo}', 'completed')">Selesaikan Transaksi (Complete)</button>
+        `}
+      </div>
+    `;
+  } else {
+    html += `<span class="text-sm text-muted">Tidak ada aksi approval yang diperlukan untuk role Anda pada status ini.</span>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+/** Transition Handlers */
+async function executeTransition(transNo, action) {
+  const feedback = document.getElementById('action-feedback')?.value || '';
+  try {
+    await apiPost(action, { TransNo: transNo, feedback });
+    alert(`Transaksi berhasil di-${action}.`);
+    hideModal('detail-modal');
+    loadTransactions();
+    loadDashboard();
+  } catch (err) {
+    alert('Gagal memproses approval: ' + err.message);
+  }
+}
+
+async function executeBuyerApprove(transNo) {
+  const buyerNote = document.getElementById('buyer-note')?.value || '';
+  const BuyerCausedBy = document.getElementById('buyer-caused-by')?.value || '';
+  const buyerDecision = document.getElementById('buyer-decision')?.value || '';
+
+  try {
+    await apiPost('approve', { TransNo: transNo, buyerNote, BuyerCausedBy, buyerDecision });
+    alert('Transaksi berhasil di-approve oleh Buyer.');
+    hideModal('detail-modal');
+    loadTransactions();
+  } catch (err) {
+    alert('Gagal memproses approval Buyer: ' + err.message);
+  }
+}
+
+async function executeStoreFeedback(transNo, actionType) {
+  const StoreTransNo = document.getElementById('store-trans-no')?.value || '';
+  const feedback = document.getElementById('store-feedback')?.value || '';
+
+  try {
+    await apiPost('storeFeedback', { TransNo: transNo, action: actionType, StoreTransNo, feedback });
+    alert('Feedback Store berhasil disimpan.');
+    hideModal('detail-modal');
+    loadTransactions();
+  } catch (err) {
+    alert('Gagal menyimpan feedback Store: ' + err.message);
+  }
+}
+
+async function executeBuyerFinal(transNo, decisionType) {
+  const note = document.getElementById('buyer-final-note')?.value || '';
+  try {
+    await apiPost('buyerFinal', { TransNo: transNo, decision: decisionType, note });
+    alert('Keputusan Final Buyer berhasil disimpan.');
+    hideModal('detail-modal');
+    loadTransactions();
+    loadDashboard();
+  } catch (err) {
+    alert('Gagal menyimpan keputusan Buyer: ' + err.message);
+  }
+}
