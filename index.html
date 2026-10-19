@@ -16,8 +16,10 @@
       <div class="modal-content">
         <h3>Pengaturan Backend API</h3>
         <p>Masukkan Web App URL dari Deployment Google Apps Script:</p>
-        <input type="text" id="gas-url-input" placeholder="https://script.google.com/macros/s/.../exec">
-        <div class="modal-actions">
+        <div class="form-group">
+          <input type="text" id="gas-url-input" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+        <div class="modal-actions modal-footer">
           <button type="button" class="btn btn-primary" id="save-config-btn">Simpan & Lanjutkan</button>
         </div>
       </div>
@@ -44,7 +46,7 @@
             <span>Masuk Aplikasi</span>
           </button>
         </form>
-        <div class="login-footer">
+        <div class="login-footer text-center" style="margin-top: 1rem;">
           <button type="button" class="btn-link" id="open-config-btn">Ubah Endpoint API</button>
         </div>
       </div>
@@ -105,7 +107,7 @@
         <!-- Form Pendataan Tab -->
         <section id="tab-form" class="tab-content">
           <div class="card-form">
-            <h3>Form Pendataan Barang ADF</h3>
+            <h3 style="margin-bottom: 1.5rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem;">Form Pendataan Barang ADF</h3>
             <form id="adf-transaction-form">
               <div class="form-row">
                 <div class="form-group flex-2">
@@ -117,7 +119,7 @@
                 </div>
                 <div class="form-group flex-1">
                   <label for="form-place">Lokasi / Place</label>
-                  <input type="text" id="form-place" readonly>
+                  <input type="text" id="form-place" readonly style="background-color: #f1f5f9;">
                 </div>
               </div>
 
@@ -126,7 +128,7 @@
               </div>
 
               <div class="form-row">
-                <div class="form-group">
+                <div class="form-group flex-1">
                   <label for="form-sku">SKU</label>
                   <input type="text" id="form-sku" placeholder="Nomor SKU">
                 </div>
@@ -137,85 +139,88 @@
               </div>
 
               <div class="form-row">
-                <div class="form-group">
+                <div class="form-group flex-1">
                   <label for="form-dept">Departemen</label>
                   <input type="text" id="form-dept" placeholder="Dept">
                 </div>
-                <div class="form-group">
+                <div class="form-group flex-1">
                   <label for="form-commodity">Komoditas</label>
                   <input type="text" id="form-commodity" placeholder="Commodity">
                 </div>
               </div>
 
               <div class="form-row">
-                <div class="form-group">
+                <div class="form-group flex-1">
                   <label for="form-price">Harga Satuan (Rp) *</label>
                   <input type="number" id="form-price" required min="0" value="0">
                 </div>
-                <div class="form-group">
+                <div class="form-group flex-1">
                   <label for="form-qty">Jumlah (Qty) *</label>
                   <input type="number" id="form-qty" required min="1" value="1">
                 </div>
-                <div class="form-group">
+                <div class="form-group flex-1">
                   <label for="form-discount-percent">Diskon (%)</label>
                   <input type="number" id="form-discount-percent" min="0" max="100" value="0">
                 </div>
               </div>
 
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Total Promo: <strong id="calc-promo">Rp 0</strong></label>
+              <div class="summary-box">
+                <div class="summary-item">
+                  <span>Total Promo:</span> <strong id="calc-promo">Rp 0</strong>
                 </div>
-                <div class="form-group">
-                  <label>Potongan Diskon: <strong id="calc-discount">Rp 0</strong></label>
+                <div class="summary-item">
+                  <span>Potongan Diskon:</span> <strong id="calc-discount">Rp 0</strong>
                 </div>
-                <div class="form-group">
-                  <label>Total Final: <strong id="calc-final">Rp 0</strong></label>
+                <div class="summary-item highlight">
+                  <span>Total Final:</span> <strong id="calc-final">Rp 0</strong>
                 </div>
               </div>
 
               <div class="form-group">
                 <label for="form-reason">Alasan Pengajuan</label>
-                <textarea id="form-reason" rows="2" placeholder="Alasan kerusakan / penyesuaian harga"></textarea>
+                <textarea id="form-reason" rows="3" placeholder="Alasan kerusakan / penyesuaian harga"></textarea>
               </div>
 
               <div class="form-row">
-                <div class="form-group">
+                <div class="form-group flex-1">
                   <label for="form-proposal">Nama Proposal</label>
                   <input type="text" id="form-proposal" placeholder="Proposal">
                 </div>
-                <div class="form-group">
+                <div class="form-group flex-1">
                   <label for="form-docno">Nomor Dokumen Acuan</label>
                   <input type="text" id="form-docno" placeholder="Doc No / Nota">
                 </div>
               </div>
 
-              <button type="submit" class="btn btn-primary btn-block" id="submit-trans-btn">Simpan & Ambil No. Transaksi</button>
+              <button type="submit" class="btn btn-primary btn-block" id="submit-trans-btn" style="margin-top: 1rem; font-size: 1.1rem; padding: 0.8rem;">Simpan & Ambil No. Transaksi</button>
             </form>
 
             <!-- Photo Upload Area -->
             <div id="photo-upload-section" class="photo-section hidden">
-              <hr>
-              <h4>Dokumentasi Foto Wajib (Dengan Watermark GPS)</h4>
-              <p class="text-sm">Nomor Transaksi: <strong id="created-trans-no">-</strong></p>
+              <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--border);">
+              <h4 style="margin-bottom: 0.5rem;">Dokumentasi Foto Wajib (Dengan Watermark GPS)</h4>
+              <p class="text-sm alert alert-warning" style="padding: 0.5rem; margin-bottom: 1rem;">
+                Nomor Transaksi Aktif: <strong id="created-trans-no">-</strong>
+              </p>
+              
               <div class="photo-grid">
                 <div class="photo-box">
                   <label>Foto 1 (Kondisi Barang)</label>
                   <input type="file" id="photo-input-1" accept="image/*" capture="environment">
-                  <button type="button" class="btn btn-secondary btn-sm" id="upload-btn-1">Upload Foto 1</button>
-                  <span id="photo-status-1" class="text-sm text-muted">Belum ada foto</span>
+                  <button type="button" class="btn btn-secondary btn-sm btn-block" id="upload-btn-1">Upload Foto 1</button>
+                  <span id="photo-status-1" class="text-sm text-muted text-center">Belum ada foto</span>
                 </div>
                 <div class="photo-box">
                   <label>Foto 2 (Tag Harga/Label)</label>
                   <input type="file" id="photo-input-2" accept="image/*" capture="environment">
-                  <button type="button" class="btn btn-secondary btn-sm" id="upload-btn-2">Upload Foto 2</button>
-                  <span id="photo-status-2" class="text-sm text-muted">Belum ada foto</span>
+                  <button type="button" class="btn btn-secondary btn-sm btn-block" id="upload-btn-2">Upload Foto 2</button>
+                  <span id="photo-status-2" class="text-sm text-muted text-center">Belum ada foto</span>
                 </div>
                 <div class="photo-box">
                   <label>Foto 3 (Pendukung/Area)</label>
                   <input type="file" id="photo-input-3" accept="image/*" capture="environment">
-                  <button type="button" class="btn btn-secondary btn-sm" id="upload-btn-3">Upload Foto 3</button>
-                  <span id="photo-status-3" class="text-sm text-muted">Belum ada foto</span>
+                  <button type="button" class="btn btn-secondary btn-sm btn-block" id="upload-btn-3">Upload Foto 3</button>
+                  <span id="photo-status-3" class="text-sm text-muted text-center">Belum ada foto</span>
                 </div>
               </div>
             </div>
@@ -226,8 +231,8 @@
         <section id="tab-history" class="tab-content">
           <div class="section-header">
             <h3>Daftar Pengajuan Transaksi</h3>
-            <div class="filter-controls">
-              <select id="filter-status">
+            <div class="filter-controls" style="display: flex; gap: 0.5rem;">
+              <select id="filter-status" class="form-control" style="padding: 0.4rem; border-radius: var(--radius); border: 1px solid var(--border);">
                 <option value="">-- Semua Status --</option>
                 <option value="PENDING_ADM">PENDING_ADM</option>
                 <option value="PENDING_MGR">PENDING_MGR</option>
@@ -271,13 +276,13 @@
     <div id="detail-modal" class="modal hidden">
       <div class="modal-content modal-lg">
         <div class="modal-header">
-          <h3>Detail Transaksi: <span id="modal-trans-no"></span></h3>
+          <h3 style="margin: 0;">Detail: <span id="modal-trans-no" style="color: var(--primary);"></span></h3>
           <button class="close-modal-btn">&times;</button>
         </div>
         <div class="modal-body" id="modal-detail-content">
           <!-- Populated dynamically -->
         </div>
-        <div class="modal-footer" id="modal-action-footer">
+        <div class="modal-footer" id="modal-action-footer" style="flex-wrap: wrap;">
           <!-- Approval buttons injected based on Role and Status -->
         </div>
       </div>
