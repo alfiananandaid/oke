@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0f172a">
+  <title>Automatic Document Feeder (ADF)</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">ADF</div><div><b>Automatic Document Feeder</b><small>Document workflow</small></div></div>
+      <nav id="nav" hidden>
+        <button class="nav-item active" data-view="dashboard">◫ <span>Dashboard</span></button>
+        <button class="nav-item" data-view="new">＋ <span>New Proposal</span></button>
+        <button class="nav-item" data-view="mine">▤ <span>My Submission</span></button>
+        <button class="nav-item" data-view="approval">✓ <span>Approval Center</span></button>
+      </nav>
+      <div class="sidebar-bottom"><span class="dot"></span><span id="connectionLabel">Not connected</span></div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div><div class="eyebrow">ADF WORKSPACE</div><h1 id="pageTitle">Welcome back</h1></div>
+        <div class="user-chip" id="userChip" hidden><div class="avatar" id="avatar">A</div><div><b id="userName">User</b><small id="userRole">Role</small></div><button class="icon-btn" id="logoutBtn" title="Logout">↗</button></div>
+      </header>
+      <section id="loginView" class="login-layout">
+        <div class="login-copy"><div class="pill">SECURE DOCUMENT WORKFLOW</div><h2>Semua pengajuan.<br><span>Satu alur kerja.</span></h2><p>Kelola proposal, foto dokumentasi, approval, dan SLA dalam satu workspace.</p>
+          <div class="feature-row"><span>✓</span> Approval berjenjang</div><div class="feature-row"><span>✓</span> Place-based access</div><div class="feature-row"><span>✓</span> Audit trail</div>
+        </div>
+        <form id="loginForm" class="glass-card">
+          <div class="card-icon">↗</div><h2>Masuk ke ADF</h2><p class="muted">Gunakan akun ADF Anda.</p>
+          <label>Username<input id="username" autocomplete="username" required placeholder="Masukkan username"></label>
+          <label>Password<input id="password" type="password" autocomplete="current-password" required placeholder="Masukkan password"></label>
+          <button class="primary full" type="submit">Login <span>→</span></button>
+          <div id="loginMessage" class="message" role="status"></div>
+          <p class="tiny">Sesi maksimal 12 jam. Login di perangkat lain akan menggantikan sesi sebelumnya.</p>
+        </form>
+      </section>
+      <section id="appView" hidden>
+        <div id="notice" class="notice" hidden></div>
+        <div id="viewContent"></div>
+      </section>
+    </main>
+  </div>
+  <dialog id="modal"><div class="modal-head"><div><div class="eyebrow">ADF FORM</div><h2 id="modalTitle">New Proposal</h2></div><button class="icon-btn" id="closeModal">×</button></div><div id="modalBody"></div></dialog>
+  <script src="app.js"></script>
+</body>
+</html>
